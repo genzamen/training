@@ -392,16 +392,45 @@
     const audioPlayer = new Audio();
     function speakText(text, lang) {
       if (!text) return;
+
+      // Приводим короткие коды к стандартным языковым меткам
+      const langMap = {
+        'de': 'de-DE',
+        'hu': 'hu-HU',
+        'en': 'en-US',
+        'ru': 'ru-RU'
+      };
+      const targetLang = langMap[lang] || 'de-DE';
+
+      // 1. Пробуем встроенный синтезатор речи браузера (самый надежный способ на телефонах и ПК)
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel(); // Останавливаем предыдущую озвучку
+
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = targetLang;
+
+        // Ищем голос, явно соответствующий нужному языку
+        const voices = window.speechSynthesis.getVoices();
+        const matchingVoice = voices.find(v => v.lang.startsWith(lang) || v.lang.replace('_', '-').startsWith(langMap[lang]));
+        if (matchingVoice) {
+          utterance.voice = matchingVoice;
+        }
+
+        window.speechSynthesis.speak(utterance);
+        return;
+      }
+
+      // 2. Резервный вариант через внешнее аудио
       const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
       audioPlayer.src = googleTtsUrl;
-      audioPlayer.play().catch(() => {
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(text);
-          utterance.lang = lang === 'de' ? 'de-DE' : lang === 'hu' ? 'hu-HU' : lang === 'en' ? 'en-US' : 'ru-RU';
-          window.speechSynthesis.speak(utterance);
-        }
-      });
+      audioPlayer.play().catch(e => console.log("Audio play error:", e));
+    }
+
+    // Предзагрузка голосов браузером
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
     }
 
     function parseCSV(text) {
