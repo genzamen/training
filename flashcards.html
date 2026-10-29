@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Универсальные Карточки (CSV)</title>
+  <script src="https://unpkg.com/docx@7.8.2/build/index.js"></script>
+  <style>
+    :root {
+      --bg-color: #0f172a;
+      --card-bg: #1e293b;
+      --card-back-bg: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #ef4444;
+      --danger-hover: #dc2626;
+      --success: #10b981;
+      --success-hover: #059669;
+      --border-color: #475569;
+      --warning: #f59e0b;
+      --english-blue: #38bdf8;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+
+    body {
+      background-color: var(--bg-color); color: var(--text-main);
+      min-height: 100vh; display: flex; flex-direction: column; align-items: center; padding: 20px;
+    }
+
+    .locked { opacity: 0.5; pointer-events: none; filter: grayscale(100%); }
+
+    header {
+      width: 100%; max-width: 700px; display: flex; justify-content: space-between;
+      align-items: center; margin-bottom: 20px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);
+    }
+
+    h1 { font-size: 1.2rem; font-weight: 600; }
+
+    .user-select-box { display: flex; align-items: center; gap: 8px; }
+    .select-input {
+      background: var(--card-bg); color: var(--text-main); border: 1px solid var(--border-color);
+      padding: 6px 12px; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; outline: none;
+    }
+    .select-input:focus { border-color: var(--accent); }
+    .select-input.highlight { border-color: var(--danger); box-shadow: 0 0 8px var(--danger); }
+
+    .file-info {
+      font-size: 0.85rem; color: #38bdf8; font-weight: 500; background: rgba(56, 189, 248, 0.1);
+      padding: 4px 10px; border-radius: 6px; border: 1px solid rgba(56, 189, 248, 0.2); margin-left: 10px;
+    }
+
+    .controls-panel { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px; }
+    .controls-row { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .group-label { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .btn-group { display: inline-flex; background: var(--card-bg); padding: 3px; border-radius: 8px; border: 1px solid var(--border-color); }
+    .btn-toggle {
+      background: transparent; border: none; color: var(--text-muted); padding: 6px 12px;
+      border-radius: 6px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: all 0.2s;
+    }
+    .btn-toggle.active { background-color: var(--accent); color: white; }
+
+    .file-upload-btn {
+      position: relative; overflow: hidden; display: inline-block; text-align: center;
+      background-color: var(--card-bg); border: 1px solid var(--border-color); font-weight: 600;
+      color: var(--text-main); padding: 7px 14px; border-radius: 8px; cursor: pointer; font-size: 0.85rem;
+    }
+    .file-upload-btn:hover { border-color: var(--accent); }
+    .file-upload-btn input[type="file"] { position: absolute; left: 0; top: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+
+    .checkbox-label { display: flex; align-items: center; gap: 6px; cursor: pointer; font-size: 0.85rem; margin-left: auto; }
+
+    .progress-bars-container { width: 100%; max-width: 700px; display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+    .progress-row { display: flex; align-items: center; gap: 10px; }
+    .progress-label { font-size: 0.75rem; color: var(--text-muted); width: 120px; text-align: right; }
+    .progress-track { flex: 1; height: 10px; background-color: var(--card-bg); border-radius: 5px; overflow: hidden; border: 1px solid var(--border-color); }
+    .progress-bar-green { height: 100%; width: 0%; background-color: var(--success); transition: width 0.3s ease; }
+    .progress-bar-red { height: 100%; width: 0%; background-color: var(--danger); transition: width 0.3s ease; }
+    .percent-badge { font-size: 0.8rem; font-weight: 600; width: 45px; text-align: left; }
+    .percent-badge.green { color: var(--success); }
+    .percent-badge.red { color: var(--danger); }
+
+    .stats { width: 100%; max-width: 700px; display: flex; justify-content: space-between; margin-bottom: 15px; font-size: 0.85rem; color: var(--text-muted); }
+
+    .card-container { width: 100%; max-width: 700px; height: 300px; perspective: 1000px; margin-bottom: 20px; cursor: pointer; }
+    .card { width: 100%; height: 100%; position: relative; transform-style: preserve-3d; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1); border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5); }
+    .card.flipped { transform: rotateY(180deg); }
+    
+    .card-face {
+      position: absolute; width: 100%; height: 100%; backface-visibility: hidden; border-radius: 16px;
+      display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 30px; text-align: center; border: 1px solid var(--border-color);
+    }
+    .card-front { background-color: var(--card-bg); }
+    .card-back { background-color: var(--card-back-bg); transform: rotateY(180deg); }
+
+    .card-text { font-size: 2.2rem; font-weight: 600; line-height: 1.35; }
+    .card-english { margin-top: 14px; font-size: 1.1rem; color: var(--english-blue); font-weight: 500; opacity: 0.85; letter-spacing: 0.3px; }
+    .repeat-flag { position: absolute; top: 15px; right: 20px; background: rgba(245, 158, 11, 0.2); color: var(--warning); border: 1px solid var(--warning); font-size: 0.75rem; padding: 2px 8px; border-radius: 6px; font-weight: 600; }
+    .tts-btn { position: absolute; bottom: 15px; right: 20px; background: transparent; border: none; font-size: 1.6rem; cursor: pointer; opacity: 0.8; transition: opacity 0.2s, transform 0.1s; }
+    .tts-btn:hover { opacity: 1.0; transform: scale(1.1); }
+
+    .action-buttons { width: 100%; max-width: 700px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px; }
+    .btn-action { padding: 15px; font-size: 1rem; font-weight: 600; border-radius: 12px; border: none; display: flex; align-items: center; justify-content: center; gap: 8px; color: white; cursor: pointer; }
+    .btn-repeat { background-color: var(--danger); }
+    .btn-repeat:hover { background-color: var(--danger-hover); }
+    .btn-know { background-color: var(--success); }
+    .btn-know:hover { background-color: var(--success-hover); }
+
+    .summary-panel { display: none; width: 100%; max-width: 700px; background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 16px; padding: 25px; margin-bottom: 20px; }
+    .summary-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 15px; color: var(--warning); }
+    .unlearned-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 0.9rem; }
+    .unlearned-table th, .unlearned-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border-color); }
+    .unlearned-table th { color: var(--text-muted); }
+    
+    .summary-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+    .btn-summary { flex: 1; min-width: 200px; padding: 12px; font-weight: 600; background-color: var(--accent); }
+    .btn-summary:hover { background-color: var(--accent-hover); }
+    .btn-docx { background-color: #0284c7; }
+    .btn-docx:hover { background-color: #0369a1; }
+
+    .shortcuts-info { width: 100%; max-width: 700px; font-size: 0.8rem; color: var(--text-muted); text-align: center; margin-top: 10px; }
+    .shortcut-key { background: var(--card-bg); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border-color); color: var(--text-main); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Карточки (CSV)</h1>
+    <div class="user-select-box">
+      <span class="group-label">Ученик:</span>
+      <select id="user-select" class="select-input highlight">
+        <option value="" disabled selected>-- Выбрать --</option>
+        <option value="albert">Albert</option>
+        <option value="henrich">Henrich</option>
+        <option value="katerina">Katerina</option>
+      </select>
+    </div>
+  </header>
+
+  <div id="main-app" class="locked">
+    <div class="controls-panel">
+      <div class="controls-row">
+        <div class="file-upload-btn">
+          Открыть CSV
+          <input type="file" id="csv-file-input" accept=".csv, .txt">
+        </div>
+        <div id="file-name" class="file-info">Файл не выбран</div>
+
+        <span class="group-label" style="margin-left: auto;">Язык:</span>
+        <div class="btn-group" id="lang-btn-group">
+          <button class="btn-toggle active" data-lang="de">DEU</button>
+          <button class="btn-toggle" data-lang="hu">HUN</button>
+          <button class="btn-toggle" data-lang="en">ENG</button>
+          <button class="btn-toggle" data-lang="ru">RUS</button>
+        </div>
+
+        <label class="checkbox-label">
+          <input type="checkbox" id="auto-tts-check" checked>
+          Автоозвучка
+        </label>
+      </div>
+
+      <div class="controls-row">
+        <span class="group-label">Направление:</span>
+        <div class="btn-group" id="dir-btn-group">
+          <button class="btn-toggle active" data-dir="direct">ИнЯз ➔ РУС</button>
+          <button class="btn-toggle" data-dir="reverse">РУС ➔ ИнЯз</button>
+          <button class="btn-toggle" data-dir="random">🔀 Случайное</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="progress-bars-container">
+      <div class="progress-row">
+        <span class="progress-label">Выполнено из:</span>
+        <div class="progress-track"><div class="progress-bar-green" id="progress-bar-green"></div></div>
+        <span class="percent-badge green" id="percent-green">0%</span>
+      </div>
+      <div class="progress-row">
+        <span class="progress-label">Ошибки в очереди:</span>
+        <div class="progress-track"><div class="progress-bar-red" id="progress-bar-red"></div></div>
+        <span class="percent-badge red" id="percent-red">0%</span>
+      </div>
+    </div>
+
+    <div class="stats">
+      <span id="card-counter">Осталось: 0</span>
+      <span id="repeat-counter" style="color: var(--warning);">Невыученных в очереди: 0</span>
+    </div>
+
+    <div class="card-container" id="card-container">
+      <div class="card" id="card">
+        <div class="card-face card-front">
+          <div id="repeat-flag" class="repeat-flag" style="display:none;">↺ На повторе</div>
+          <div class="card-text" id="front-text">Откройте CSV файл для старта</div>
+          <div class="card-english" id="front-english" style="display:none;"></div>
+          <button class="tts-btn" id="tts-btn-front" title="Озвучить (S)">🔊</button>
+        </div>
+        <div class="card-face card-back">
+          <div class="card-text" id="back-text">...</div>
+          <div class="card-english" id="back-english" style="display:none;"></div>
+          <button class="tts-btn" id="tts-btn-back" title="Озвучить (S)">🔊</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="action-buttons" id="action-buttons">
+      <button class="btn-action btn-repeat" id="btn-repeat">✕ Не выучил <span style="font-size: 0.8rem; opacity: 0.8;">(R / ↓ / 1)</span></button>
+      <button class="btn-action btn-know" id="btn-know">✓ Знаю <span style="font-size: 0.8rem; opacity: 0.8;">(Enter / → / 5)</span></button>
+    </div>
+
+    <div class="summary-panel" id="summary-panel">
+      <div class="summary-title" id="summary-title">Урок завершен</div>
+      <div id="summary-text" style="margin-bottom:15px; color:var(--text-muted);"></div>
+      <div id="unlearned-table-container"></div>
+      <div class="summary-actions">
+        <button class="btn-action btn-summary" id="btn-restart-all">🔄 Повторить весь урок</button>
+        <button class="btn-action btn-repeat btn-summary" id="btn-restart-unlearned">🔁 Повторить невыученные</button>
+        <button class="btn-action btn-know btn-summary" id="btn-export-unlearned">📥 Скачать CSV</button>
+        <button class="btn-action btn-docx btn-summary" id="btn-export-docx">📄 Скачать DOCX</button>
+      </div>
+      <div style="margin-top:10px; font-size:0.8rem; color:var(--text-muted);" id="sync-status"></div>
+    </div>
+  </div>
+
+  <div class="shortcuts-info">
+    Горячие клавиши: <span class="shortcut-key">Пробел</span> — перевернуть | <span class="shortcut-key">S</span> — озвучка | <span class="shortcut-key">↓</span> — не выучил | <span class="shortcut-key">Enter</span> — знаю
+  </div>
+
+  <script>
+    const BIN_ID = "6a8883fcda38895dfe008143";
+    const API_KEY = "$2a$10$YmZD6Bx1r9wtnQ2P3TQFu./3XAiXGuaAcOJDopbB9039FDvb3CRwC";
+    const BIN_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+
+    let initialDeck = [], activeDeck = [], unlearnedList = [];
+    let totalTargetWork = 0, initialCardsPassed = 0, currentUnlearnedCount = 0;
+    let isFlipped = false, currentCardDirection = 'direct';
+    let selectedLang = 'de', selectedDirection = 'direct';
+    let currentUser = '', currentFileName = '';
+
+    const userSelect = document.getElementById('user-select');
+    const mainApp = document.getElementById('main-app');
+    const fileInput = document.getElementById('csv-file-input');
+    const fileNameDisplay = document.getElementById('file-name');
+    const autoTtsCheck = document.getElementById('auto-tts-check');
+    const syncStatus = document.getElementById('sync-status');
+    const progressBarGreen = document.getElementById('progress-bar-green');
+    const progressBarRed = document.getElementById('progress-bar-red');
+    const percentGreen = document.getElementById('percent-green');
+    const percentRed = document.getElementById('percent-red');
+    const cardCounter = document.getElementById('card-counter');
+    const repeatCounter = document.getElementById('repeat-counter');
+    const cardContainer = document.getElementById('card-container');
+    const cardEl = document.getElementById('card');
+    const frontTextEl = document.getElementById('front-text');
+    const frontEnglishEl = document.getElementById('front-english');
+    const backTextEl = document.getElementById('back-text');
+    const backEnglishEl = document.getElementById('back-english');
+    const repeatFlag = document.getElementById('repeat-flag');
+    const actionButtons = document.getElementById('action-buttons');
+    const summaryPanel = document.getElementById('summary-panel');
+
+    // --- LOCAL STORAGE LOGIC ---
+    function saveSettings() {
+      localStorage.setItem('fc_settings', JSON.stringify({
+        user: currentUser, lang: selectedLang, dir: selectedDirection, autoTts: autoTtsCheck.checked
+      }));
+    }
+
+    function loadSettings() {
+      const saved = JSON.parse(localStorage.getItem('fc_settings'));
+      if (saved) {
+        if (saved.user) {
+          currentUser = saved.user;
+          userSelect.value = currentUser;
+          mainApp.classList.remove('locked');
+          userSelect.classList.remove('highlight');
+        }
+        if (saved.lang) setLanguage(saved.lang);
+        if (saved.dir) setDirection(saved.dir);
+        if (saved.autoTts !== undefined) autoTtsCheck.checked = saved.autoTts;
+      }
+    }
+
+    function saveSession() {
+      if (!currentUser || activeDeck.length === 0) return;
+      localStorage.setItem(`fc_session_${currentUser}`, JSON.stringify({
+        activeDeck, initialDeck, unlearnedList, totalTargetWork,
+        initialCardsPassed, currentUnlearnedCount, currentFileName
+      }));
+    }
+
+    function loadSession() {
+      if (!currentUser) return;
+      const saved = JSON.parse(localStorage.getItem(`fc_session_${currentUser}`));
+      if (saved && saved.activeDeck && saved.activeDeck.length > 0) {
+        activeDeck = saved.activeDeck; initialDeck = saved.initialDeck; unlearnedList = saved.unlearnedList;
+        totalTargetWork = saved.totalTargetWork; initialCardsPassed = saved.initialCardsPassed;
+        currentUnlearnedCount = saved.currentUnlearnedCount; currentFileName = saved.currentFileName;
+        fileNameDisplay.textContent = currentFileName;
+        summaryPanel.style.display = 'none'; cardContainer.style.display = 'block'; actionButtons.style.display = 'grid';
+        renderCard();
+      } else {
+        frontTextEl.textContent = 'Откройте CSV файл для старта';
+        fileNameDisplay.textContent = 'Файл не выбран';
+        activeDeck = [];
+        updateProgress();
+      }
+    }
+
+    function clearSession() {
+      localStorage.removeItem(`fc_session_${currentUser}`);
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadSettings();
+      if (currentUser) loadSession();
+    });
+
+    userSelect.addEventListener('change', (e) => {
+      currentUser = e.target.value;
+      if (currentUser) {
+        mainApp.classList.remove('locked');
+        userSelect.classList.remove('highlight');
+        saveSettings();
+        loadSession();
+      }
+    });
+
+    autoTtsCheck.addEventListener('change', saveSettings);
+
+    // --- CLOUD LOGIC ---
+    async function syncToCloudAtEnd() {
+      if (!currentUser || !currentFileName) return;
+      syncStatus.textContent = "Синхронизация с jsonbin.io...";
+      try {
+        const getRes = await fetch(BIN_URL + '/latest', { headers: { 'X-Master-Key': API_KEY } });
+        let data = await getRes.json();
+        let record = data.record || {};
+        if (!record[currentUser]) record[currentUser] = {};
+        
+        if (unlearnedList.length === 0) {
+          delete record[currentUser][currentFileName];
+          syncStatus.textContent = "Прогресс 100%: Запись файла на сервере удалена (очистка места).";
+        } else {
+          record[currentUser][currentFileName] = unlearnedList;
+          syncStatus.textContent = `Сохранено ${unlearnedList.length} ошибок на сервере.`;
+        }
+        await fetch(BIN_URL, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'X-Master-Key': API_KEY }, body: JSON.stringify(record) });
+      } catch (err) {
+        syncStatus.textContent = "Ошибка облачной синхронизации.";
+      }
+    }
+
+    async function checkCloudForFile(fileName) {
+      if (!currentUser) return null;
+      try {
+        frontTextEl.textContent = 'Проверка облака...';
+        const getRes = await fetch(BIN_URL + '/latest', { headers: { 'X-Master-Key': API_KEY } });
+        let data = await getRes.json();
+        let record = data.record || {};
+        if (record[currentUser] && record[currentUser][fileName] && record[currentUser][fileName].length > 0) {
+          return record[currentUser][fileName];
+        }
+        return null;
+      } catch (err) { return null; }
+    }
+
+    function setLanguage(langCode) {
+      selectedLang = langCode;
+      document.querySelectorAll('#lang-btn-group .btn-toggle').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-lang') === langCode));
+      saveSettings();
+    }
+
+    function setDirection(dirCode) {
+      selectedDirection = dirCode;
+      document.querySelectorAll('#dir-btn-group .btn-toggle').forEach(btn => btn.classList.toggle('active', btn.getAttribute('data-dir') === dirCode));
+      saveSettings();
+    }
+
+    document.querySelectorAll('#lang-btn-group .btn-toggle').forEach(btn => btn.addEventListener('click', (e) => setLanguage(e.target.getAttribute('data-lang'))));
+    document.querySelectorAll('#dir-btn-group .btn-toggle').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        setDirection(e.target.getAttribute('data-dir'));
+        if (activeDeck.length > 0) renderCard();
+      });
+    });
+
+    const audioPlayer = new Audio();
+    function speakText(text, lang) {
+      if (!text) return;
+      const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
+      audioPlayer.src = googleTtsUrl;
+      audioPlayer.play().catch(() => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(text);
+          utterance.lang = lang === 'de' ? 'de-DE' : lang === 'hu' ? 'hu-HU' : lang === 'en' ? 'en-US' : 'ru-RU';
+          window.speechSynthesis.speak(utterance);
+        }
+      });
+    }
+
+    function parseCSV(text) {
+      const lines = text.split(/\r\n|\n/);
+      const cards = [];
+      for (let line of lines) {
+        line = line.trim(); if (!line) continue;
+        const delimiter = line.includes(';') ? ';' : ',';
+        let parts = [], inQuotes = false, currentPart = '';
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"' || char === "'") inQuotes = !inQuotes;
+          else if (char === delimiter && !inQuotes) { parts.push(currentPart.trim()); currentPart = ''; }
+          else currentPart += char;
+        }
+        parts.push(currentPart.trim());
+        parts = parts.map(p => p.replace(/^["']|["']$/g, '').trim());
+        if (parts.length >= 2) cards.push({ foreign: parts[0] || '', russian: parts[1] || '', english: parts.length >= 3 ? parts[2] : '', isRepeat: false });
+      }
+      return cards;
+    }
+
+    function shuffle(array) {
+      const arr = [...array];
+      for (let i = arr.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [arr[i], arr[j]] = [arr[j], arr[i]]; }
+      return arr;
+    }
+
+    fileInput.addEventListener('change', async (e) => {
+      if (!currentUser) return;
+      const file = e.target.files[0];
+      if (!file) return;
+
+      currentFileName = file.name;
+      fileNameDisplay.textContent = currentFileName;
+
+      const lowerName = currentFileName.toLowerCase();
+      if (lowerName.includes('hun') || lowerName.includes('_hu.')) setLanguage('hu');
+      else if (lowerName.includes('deu') || lowerName.includes('ger') || lowerName.includes('_de.')) setLanguage('de');
+      else if (lowerName.includes('eng') || lowerName.includes('_en.')) setLanguage('en');
+      else if (lowerName.includes('rus') || lowerName.includes('_ru.')) setLanguage('ru');
+
+      const reader = new FileReader();
+      reader.onload = async (evt) => {
+        const parsed = parseCSV(evt.target.result);
+        if (parsed.length === 0) return alert('Файл пуст или формат неверен.');
+        initialDeck = parsed;
+        
+        const cloudUnlearned = await checkCloudForFile(currentFileName);
+        if (cloudUnlearned && cloudUnlearned.length > 0) {
+           if (confirm(`Найдено ${cloudUnlearned.length} незавершенных карточек в облаке. Продолжить их изучение?`)) {
+               startNewLesson(cloudUnlearned, true);
+               return;
+           }
+        }
+        startNewLesson([...initialDeck], false);
+      };
+      reader.readAsText(file, 'UTF-8');
+    });
+
+    function startNewLesson(cards, isContinuation = false) {
+      activeDeck = shuffle(cards.map(c => ({...c, isRepeat: false})));
+      totalTargetWork = isContinuation ? cards.length : initialDeck.length * 2; 
+      initialCardsPassed = 0; currentUnlearnedCount = isContinuation ? cards.length : 0; unlearnedList = [];
+      summaryPanel.style.display = 'none'; cardContainer.style.display = 'block'; actionButtons.style.display = 'grid';
+      saveSession();
+      renderCard();
+    }
+
+    function renderCard() {
+      isFlipped = false; cardEl.classList.remove('flipped');
+      if (activeDeck.length === 0) { showSummary(); return; }
+
+      const currentCard = activeDeck[0];
+      currentCardDirection = selectedDirection === 'random' ? (Math.random() > 0.5 ? 'direct' : 'reverse') : selectedDirection;
+
+      if (currentCardDirection === 'direct') {
+        frontTextEl.textContent = currentCard.foreign; frontEnglishEl.style.display = 'none';
+        backTextEl.textContent = currentCard.russian;
+        if (currentCard.english) { backEnglishEl.textContent = currentCard.english; backEnglishEl.style.display = 'block'; } else backEnglishEl.style.display = 'none';
+      } else {
+        frontTextEl.textContent = currentCard.russian;
+        if (currentCard.english) { frontEnglishEl.textContent = currentCard.english; frontEnglishEl.style.display = 'block'; } else frontEnglishEl.style.display = 'none';
+        backTextEl.textContent = currentCard.foreign; backEnglishEl.style.display = 'none';
+      }
+
+      repeatFlag.style.display = currentCard.isRepeat ? 'block' : 'none';
+      updateProgress();
+      if (autoTtsCheck.checked && currentCardDirection === 'direct') speakText(currentCard.foreign, selectedLang);
+    }
+
+    function updateProgress() {
+      cardCounter.textContent = `Осталось: ${activeDeck.length}`;
+      repeatCounter.textContent = `Невыученных в очереди: ${currentUnlearnedCount}`;
+      const greenVal = totalTargetWork > 0 ? Math.min(Math.round((initialCardsPassed / totalTargetWork) * 100), 100) : 0;
+      const redVal = totalTargetWork > 0 ? Math.min(Math.round((currentUnlearnedCount / totalTargetWork) * 100), 100) : 0;
+      progressBarGreen.style.width = `${greenVal}%`; percentGreen.textContent = `${greenVal}%`;
+      progressBarRed.style.width = `${redVal}%`; percentRed.textContent = `${redVal}%`;
+    }
+
+    function toggleFlip() {
+      if (!currentUser || activeDeck.length === 0) return;
+      isFlipped = !isFlipped; cardEl.classList.toggle('flipped', isFlipped);
+      if (isFlipped && currentCardDirection === 'reverse' && autoTtsCheck.checked) speakText(activeDeck[0].foreign, selectedLang);
+    }
+
+    function markKnow() {
+      if (!currentUser || activeDeck.length === 0) return;
+      const card = activeDeck.shift();
+      if (!card.isRepeat) initialCardsPassed++; else if (currentUnlearnedCount > 0) currentUnlearnedCount--;
+      saveSession(); renderCard();
+    }
+
+    function markRepeat() {
+      if (!currentUser || activeDeck.length === 0) return;
+      const card = activeDeck.shift();
+      if (!card.isRepeat) { initialCardsPassed++; card.isRepeat = true; currentUnlearnedCount++; }
+      activeDeck.push(card);
+      if (!unlearnedList.some(c => c.foreign === card.foreign)) unlearnedList.push(card);
+      saveSession(); renderCard();
+    }
+
+    function showSummary() {
+      cardContainer.style.display = 'none'; actionButtons.style.display = 'none'; summaryPanel.style.display = 'block';
+      progressBarGreen.style.width = '100%'; percentGreen.textContent = '100%';
+      progressBarRed.style.width = '0%'; percentRed.textContent = '0%';
+
+      const userNameDisplay = userSelect.options[userSelect.selectedIndex].text;
+      const unlearnedTableContainer = document.getElementById('unlearned-table-container');
+
+      if (unlearnedList.length === 0) {
+        document.getElementById('summary-title').textContent = `🎉 Урок полностью завершен (${userNameDisplay})!`;
+        document.getElementById('summary-text').textContent = 'Отлично! Ни одной ошибки за весь урок.';
+        unlearnedTableContainer.innerHTML = '';
+        document.getElementById('btn-restart-unlearned').style.display = 'none';
+        document.getElementById('btn-export-unlearned').style.display = 'none';
+        document.getElementById('btn-export-docx').style.display = 'none';
+      } else {
+        document.getElementById('summary-title').textContent = `⚠️ [${userNameDisplay}] Не выучено фраз: ${unlearnedList.length}`;
+        document.getElementById('summary-text').textContent = 'Список карточек, вызвавших трудности:';
+        document.getElementById('btn-restart-unlearned').style.display = 'inline-block';
+        document.getElementById('btn-export-unlearned').style.display = 'inline-block';
+        document.getElementById('btn-export-docx').style.display = 'inline-block';
+
+        let html = `<table class="unlearned-table"><thead><tr><th>Изучаемый язык</th><th>Русский перевод</th><th>Английский эквивалент</th></tr></thead><tbody>`;
+        unlearnedList.forEach(item => { html += `<tr><td><strong>${item.foreign}</strong></td><td>${item.russian}</td><td style="color:var(--english-blue);">${item.english || '-'}</td></tr>`; });
+        html += `</tbody></table>`;
+        unlearnedTableContainer.innerHTML = html;
+      }
+      clearSession();
+      syncToCloudAtEnd();
+    }
+
+    document.getElementById('btn-restart-all').addEventListener('click', () => startNewLesson([...initialDeck]));
+    document.getElementById('btn-restart-unlearned').addEventListener('click', () => startNewLesson([...unlearnedList], true));
+
+    document.getElementById('btn-export-unlearned').addEventListener('click', () => {
+      if (unlearnedList.length === 0) return;
+      let csvContent = "\uFEFF"; unlearnedList.forEach(c => { csvContent += `"${c.foreign}";"${c.russian}";"${c.english}"\n`; });
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }); const url = URL.createObjectURL(blob);
+      const link = document.createElement("a"); link.href = url; link.download = `unlearned_${currentUser}_${currentFileName || 'deck.csv'}`;
+      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+    });
+
+    document.getElementById('btn-export-docx').addEventListener('click', () => {
+      if (unlearnedList.length === 0) return;
+      const userNameDisplay = userSelect.options[userSelect.selectedIndex].text;
+      const { Document, Packer, Paragraph, Table, TableRow, TableCell, TextRun, WidthType, AlignmentType, ShadingType } = docx;
+
+      const headerRow = new TableRow({
+        tableHeader: true,
+        children: [
+          new TableCell({ width: { size: 8, type: WidthType.PERCENTAGE }, shading: { fill: "1E293B", type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: "№", bold: true, color: "FFFFFF" })], alignment: AlignmentType.CENTER })] }),
+          new TableCell({ width: { size: 36, type: WidthType.PERCENTAGE }, shading: { fill: "1E293B", type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: "Изучаемый язык", bold: true, color: "FFFFFF" })] })] }),
+          new TableCell({ width: { size: 32, type: WidthType.PERCENTAGE }, shading: { fill: "1E293B", type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: "Русский перевод", bold: true, color: "FFFFFF" })] })] }),
+          new TableCell({ width: { size: 24, type: WidthType.PERCENTAGE }, shading: { fill: "1E293B", type: ShadingType.CLEAR }, children: [new Paragraph({ children: [new TextRun({ text: "Английский эквивалент", bold: true, color: "FFFFFF" })] })] }),
+        ]
+      });
+
+      const dataRows = unlearnedList.map((item, index) => new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: String(index + 1) })], alignment: AlignmentType.CENTER })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.foreign, bold: true })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.russian })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: item.english || "-", italics: true, color: "0284C7" })] })] }),
+        ]
+      }));
+
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: [
+            new Paragraph({ children: [new TextRun({ text: `Список сложных слов: ${userNameDisplay}`, bold: true, size: 28, color: "0F172A" })], space: { after: 100 } }),
+            new Paragraph({ children: [new TextRun({ text: `Источник: ${currentFileName} | Всего слов: ${unlearnedList.length}`, size: 20, color: "64748B" })], space: { after: 300 } }),
+            new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, rows: [headerRow, ...dataRows] })
+          ]
+        }]
+      });
+
+      Packer.toBlob(doc).then(blob => {
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a"); link.href = url;
+        link.download = `unlearned_${currentUser}_${currentFileName.replace(/\.[^/.]+$/, "")}.docx`;
+        document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      });
+    });
+
+    cardContainer.addEventListener('click', toggleFlip);
+    document.getElementById('btn-know').addEventListener('click', (e) => { e.stopPropagation(); markKnow(); });
+    document.getElementById('btn-repeat').addEventListener('click', (e) => { e.stopPropagation(); markRepeat(); });
+    document.getElementById('tts-btn-front').addEventListener('click', (e) => { e.stopPropagation(); speakText(activeDeck[0].foreign, selectedLang); });
+    document.getElementById('tts-btn-back').addEventListener('click', (e) => { e.stopPropagation(); speakText(activeDeck[0].foreign, selectedLang); });
+
+    document.addEventListener('keydown', (e) => {
+      if (['INPUT', 'SELECT', 'BUTTON'].includes(document.activeElement.tagName)) {
+        if (e.key === ' ') e.preventDefault();
+      }
+      if (mainApp.classList.contains('locked')) return;
+
+      switch (e.key) {
+        case ' ': e.preventDefault(); toggleFlip(); break;
+        case 'ArrowRight': case 'Enter': case '5': e.preventDefault(); markKnow(); break;
+        case 'ArrowDown': case 'r': case 'R': case '1': e.preventDefault(); markRepeat(); break;
+        case 's': case 'S': case 'ы': case 'Ы': e.preventDefault(); speakText(activeDeck[0].foreign, selectedLang); break;
+      }
+    });
+  </script>
+</body>
+</html>
